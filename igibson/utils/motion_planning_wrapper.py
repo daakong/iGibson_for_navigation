@@ -1,4 +1,5 @@
 import logging
+import math
 from time import sleep, time
 
 import numpy as np
@@ -6,7 +7,6 @@ import pybullet as p
 from transforms3d import euler
 
 log = logging.getLogger(__name__)
-
 
 from igibson.external.pybullet_tools.utils import (
     control_joints,
@@ -35,16 +35,16 @@ class MotionPlanningWrapper(object):
     """
 
     def __init__(
-        self,
-        env=None,
-        base_mp_algo="birrt",
-        arm_mp_algo="birrt",
-        optimize_iter=0,
-        fine_motion_plan=True,
-        full_observability_2d_planning=False,
-        collision_with_pb_2d_planning=False,
-        visualize_2d_planning=False,
-        visualize_2d_result=False,
+            self,
+            env=None,
+            base_mp_algo="birrt",
+            arm_mp_algo="birrt",
+            optimize_iter=0,
+            fine_motion_plan=True,
+            full_observability_2d_planning=False,
+            collision_with_pb_2d_planning=False,
+            visualize_2d_planning=False,
+            visualize_2d_result=False,
     ):
         """
         Get planning related parameters.
@@ -253,7 +253,7 @@ class MotionPlanningWrapper(object):
                 body_id
                 for body_id in self.env.scene.get_body_ids()
                 if body_id not in self.robot.get_body_ids()
-                and body_id != self.env.scene.objects_by_category["floors"][0].get_body_ids()[0]
+                   and body_id != self.env.scene.objects_by_category["floors"][0].get_body_ids()[0]
             ]
         else:
             obstacles = []
@@ -296,20 +296,66 @@ class MotionPlanningWrapper(object):
         self.env.simulator.step()
         self.simulator_sync()
 
+    def rotate_smothly_and_modify_plan(self, last_orn, plan):
+        rotate_factor = 0.02
+
+        if last_orn is not None:
+            if plan is not None:
+                first_point = plan[0]
+                print("first_point:", first_point)
+                delta_orn = first_point[2] - last_orn
+                if (delta_orn > 0):
+                    n = delta_orn / rotate_factor
+                    temp_orn = first_point[2]
+                    for i in range(int(n)):
+                        temp_orn = temp_orn - rotate_factor
+                        plan.insert(0, [first_point[0], first_point[1], temp_orn])
+                else:
+                    n = -delta_orn / rotate_factor
+                    temp_orn = first_point[2]
+                    for i in range(int(n)):
+                        temp_orn = temp_orn + rotate_factor
+                        plan.insert(0, [first_point[0], first_point[1], temp_orn])
+
     def dry_run_base_plan(self, path):
         """
         Dry run base motion plan by setting the base positions without physics simulation
 
         :param path: base waypoints or None if no plan can be found
         """
+        rotate_factor = 0.1
         if path is not None:
             if self.mode in ["gui_non_interactive", "gui_interactive"]:
+                # print("get original num:", last_wp, ", type ", type(last_wp))
                 for way_point in path:
+                    last_wp = get_base_values(self.robot_id)
+                    if last_wp is not None:
+                        if abs(way_point[2] - last_wp[2]) > rotate_factor:
+                            n = (way_point[2] - last_wp[2]) / rotate_factor
+                            if n > 0:
+                                for i in range(abs(int(n))):
+                                    set_base_values_with_z(
+                                        self.robot_id, [way_point[0], way_point[1], last_wp[2] + rotate_factor],
+                                        z=self.initial_height)
+                                    self.simulator_sync()
+                                    sleep(0.01)
+                            elif n < 0:
+                                for i in range(abs(int(n))):
+                                    set_base_values_with_z(
+                                        self.robot_id, [way_point[0], way_point[1], last_wp[2] - rotate_factor],
+                                        z=self.initial_height
+                                    )
+                                    self.simulator_sync()
+                                    sleep(0.01)
                     set_base_values_with_z(
                         self.robot_id, [way_point[0], way_point[1], way_point[2]], z=self.initial_height
                     )
+
                     self.simulator_sync()
-                    # sleep(0.005) # for animation
+                    sleep(0.01) # for animation
+                    # last_wp = way_point
+                    print("last_wp", last_wp)
+                    print("way point:", way_point)
             else:
                 set_base_values_with_z(self.robot_id, [path[-1][0], path[-1][1], path[-1][2]], z=self.initial_height)
 
