@@ -428,6 +428,10 @@ class BaseRobot(StatefulObject):
 
         :param action: Array[float], n-DOF length array of actions to convert and deploy on the robot
         """
+        # If we're using discrete action space, we grab the specific action and use that to convert to control
+        if self.action_type == "discrete":
+            action = np.array(self.action_list[action])
+
         assert len(action) == self.action_dim, "Action does not match robot's action dimension."
 
         self._last_action = action
@@ -435,9 +439,6 @@ class BaseRobot(StatefulObject):
         # Update state
         self.update_state()
 
-        # If we're using discrete action space, we grab the specific action and use that to convert to control
-        if self.action_type == "discrete":
-            action = np.array(self.action_list[action])
 
         # Run convert actions to controls
         control, control_type = self._actions_to_control(action=action)
