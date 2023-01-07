@@ -296,7 +296,7 @@ class MotionPlanningWrapper(object):
         self.env.simulator.step()
         self.simulator_sync()
 
-    def rotate_smothly_and_modify_plan(self, last_orn, plan):
+    def rotate_smoothly_and_modify_plan(self, last_orn, plan):
         rotate_factor = 0.02
 
         if last_orn is not None:
